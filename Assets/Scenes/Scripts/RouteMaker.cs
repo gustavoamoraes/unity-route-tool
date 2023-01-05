@@ -12,12 +12,13 @@ public class RouteMaker : MonoBehaviour
     {
         public Vector3 position;
         public Vector3 normal;
+        public Vector3 dirToPrevius;
     }
 
     [Serializable]
     public class Route
     {
-        public List<RoutePoint> anchors;
+        public List<RoutePoint> anchors = new List<RoutePoint>();
         public string name;
     }
 
@@ -40,13 +41,6 @@ public class RouteMaker : MonoBehaviour
 
                 if (i == route.anchors.Count - 1)
                     continue;
-
-                Gizmos.color = Color.yellow;
-
-                Vector3 offsetStart = (route.anchors[i].normal * distanceFromTheWall);
-                Vector3 offsetEnd = (route.anchors[i+1].normal * distanceFromTheWall);
-
-                Gizmos.DrawLine(route.anchors[i].position + offsetStart, route.anchors[i + 1].position + offsetEnd);
             }
         }
 #endif

@@ -1,12 +1,6 @@
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using Unity.VisualScripting;
 using UnityEditor;
-using UnityEditorInternal;
 using UnityEngine;
-using UnityEngine.Rendering;
-using static UnityEngine.GraphicsBuffer;
 
 [CustomEditor(typeof(RouteMaker))]
 public class RouteMakerEditor : Editor
@@ -16,6 +10,7 @@ public class RouteMakerEditor : Editor
 
     private RouteMaker routeMaker;
     private RaycastHit mouseHit;
+    bool hit;
 
     private List<bool> routesFoldout = new List<bool>();
     private SerializedProperty routes;
@@ -30,6 +25,9 @@ public class RouteMakerEditor : Editor
         {
             routesFoldout.Add(false);
         }
+
+        selectedRoute = null;
+        selectedPoint = null;
     }
 
     public override void OnInspectorGUI()
@@ -44,7 +42,8 @@ public class RouteMakerEditor : Editor
 
         if (GUILayout.Button("New Route"))
         {
-            routeMaker.routes.Add(new RouteMaker.Route());
+            RouteMaker.Route newRoute = new RouteMaker.Route();
+            routeMaker.routes.Add(newRoute);
         }
 
         serializedObject.Update();
@@ -64,8 +63,14 @@ public class RouteMakerEditor : Editor
 
             EditorGUILayout.PropertyField(routeName);
 
-            if(GUILayout.Button("Remove"))
+            if (GUILayout.Button("Remove"))
             {
+                if (selectedRoute == routeMaker.routes[i])
+                {
+                    selectedRoute = null;
+                    selectedPoint = null;
+                }
+
                 routeMaker.routes.RemoveAt(i);
             }
 
@@ -80,6 +85,11 @@ public class RouteMakerEditor : Editor
 
     public void OnSceneGUI()
     {
+        Draw();
+    }
+
+    public void Draw()
+    {
         if (routeMaker.routes.Count == 0)
             return;
 
@@ -88,7 +98,9 @@ public class RouteMakerEditor : Editor
 
         Ray worldRay = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
 
-        if (!Physics.Raycast(worldRay, out mouseHit, 10000, routeMaker.wallLayer))
+        hit = Physics.Raycast(worldRay, out mouseHit, 10000, routeMaker.wallLayer);
+
+        if (selectedRoute == null)
             return;
 
         if (selectedRoute.anchors.Count > 0)
@@ -97,12 +109,17 @@ public class RouteMakerEditor : Editor
         if (Event.current.keyCode == KeyCode.C && Event.current.type == EventType.KeyUp)
             OnAdd();
 
-        Handles.color = Color.blue;
-        Handles.DrawWireDisc(mouseHit.point, mouseHit.normal, 1.0f);
+        DrawBezierCurve();
+
+        Handles.color = UnityEngine.Color.white;
+        Handles.DrawWireDisc(mouseHit.point, mouseHit.normal, .5f);
     }
 
     public void OnAdd ()
     {
+        if (!hit)
+            return;
+
         RouteMaker.RoutePoint newRoutePoint = new RouteMaker.RoutePoint();
 
         newRoutePoint.position = mouseHit.point;
@@ -131,9 +148,33 @@ public class RouteMakerEditor : Editor
         }
 
         //Set new selected point
-        if (Event.current.type == EventType.MouseDown)
+        if (Event.current.type == EventType.MouseDown && hit )
         {
             selectedPoint = getClosestPointTo(mouseHit.point);
+        }
+    }
+
+    public void DrawBezierCurve()
+    {
+        List<RouteMaker.RoutePoint> points = selectedRoute.anchors;
+
+        for (int i = 0; i < points.Count-2; i++)
+        {
+            Vector3 anchor0 = points[i].position + points[i].normal * routeMaker.distanceFromTheWall;
+            Vector3 anchor1 = points[i+1].position + points[i + 1].normal * routeMaker.distanceFromTheWall;
+            Vector3 anchor2 = points[i+2].position + points[i + 2].normal * routeMaker.distanceFromTheWall;
+
+            Vector3 diff0 = (anchor0 - anchor1).normalized;
+            Vector3 diff1 = (anchor2 - anchor1).normalized;
+            Vector3 dir1 = (diff0 - diff1).normalized;
+            float dist = (anchor0 - anchor1).magnitude;
+
+            Vector3 control0 = anchor0 - points[i].dirToPrevius * dist/2.0f;
+            Vector3 control1 = anchor1 + dir1 * dist/2.0f;
+
+            points[i + 1].dirToPrevius = dir1;
+
+            Handles.DrawBezier(anchor0, anchor1, control0, control1, Color.yellow, null, 3.0f);
         }
     }
 
