@@ -7,10 +7,10 @@ public class RouteMakerEditor : Editor
 {
     private RouteMaker.RoutePoint selectedPoint;
     private RouteMaker.Route selectedRoute;
+    private int selectedRouteIndex = -1;
 
     private RouteMaker routeMaker;
     private RaycastHit mouseHit;
-    bool hit;
 
     private List<bool> routesFoldout = new List<bool>();
     private SerializedProperty routes;
@@ -18,16 +18,15 @@ public class RouteMakerEditor : Editor
     private void OnEnable()
     {
         routeMaker = target as RouteMaker;
-
         routes = serializedObject.FindProperty("routes");
 
         for (int i = 0; i < routes.arraySize; i++)
-        {
             routesFoldout.Add(false);
-        }
 
-        selectedRoute = null;
-        selectedPoint = null;
+        if(selectedRouteIndex != -1)
+            selectedRoute = routeMaker.routes[selectedRouteIndex];
+
+        SceneView.RepaintAll();
     }
 
     public override void OnInspectorGUI()
@@ -36,7 +35,7 @@ public class RouteMakerEditor : Editor
 
         DrawDefaultInspector();
 
-        GUILayout.Space(20);
+        GUILayout.Space(10);
 
         GUILayout.Label("Route Making", EditorStyles.centeredGreyMiniLabel);
 
@@ -44,6 +43,7 @@ public class RouteMakerEditor : Editor
         {
             RouteMaker.Route newRoute = new RouteMaker.Route();
             routeMaker.routes.Add(newRoute);
+            routesFoldout.Add(false);
         }
 
         serializedObject.Update();
@@ -63,20 +63,24 @@ public class RouteMakerEditor : Editor
 
             EditorGUILayout.PropertyField(routeName);
 
+            if (GUILayout.Button("Select"))
+            {
+                selectedRoute = routeMaker.routes[i];
+                selectedRouteIndex = i;
+                SceneView.RepaintAll();
+            }
+
             if (GUILayout.Button("Remove"))
             {
-                if (selectedRoute == routeMaker.routes[i])
+                if(selectedRoute == routeMaker.routes[i])
                 {
                     selectedRoute = null;
-                    selectedPoint = null;
+                    selectedRouteIndex = -1;
                 }
 
                 routeMaker.routes.RemoveAt(i);
-            }
-
-            if (GUILayout.Button("Edit"))
-            {
-                selectedRoute = routeMaker.routes[i];
+                routesFoldout.RemoveAt(i);
+                SceneView.RepaintAll();
             }
         }
 
@@ -90,36 +94,37 @@ public class RouteMakerEditor : Editor
 
     public void Draw()
     {
-        if (routeMaker.routes.Count == 0)
+        Handles.color = Color.white;
+        Handles.DrawWireDisc(mouseHit.point, mouseHit.normal, .5f);
+
+        if (selectedRoute == null)
             return;
 
         //Disable selection
         HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
 
+        if (selectedRoute.anchors.Count > 0)
+        {
+            if (selectedPoint != null)
+                OnEdit();
+
+            DrawBezierCurve();
+        }
+
         Ray worldRay = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
 
-        hit = Physics.Raycast(worldRay, out mouseHit, 10000, routeMaker.wallLayer);
-
-        if (selectedRoute == null)
+        if (!Physics.Raycast(worldRay, out mouseHit, 10000, routeMaker.wallLayer))
             return;
 
-        if (selectedRoute.anchors.Count > 0)
-            OnEdit();
+        if (Event.current.type == EventType.MouseDown)
+            selectedPoint = getClosestPointTo(mouseHit.point);
 
         if (Event.current.keyCode == KeyCode.C && Event.current.type == EventType.KeyUp)
             OnAdd();
-
-        DrawBezierCurve();
-
-        Handles.color = UnityEngine.Color.white;
-        Handles.DrawWireDisc(mouseHit.point, mouseHit.normal, .5f);
     }
 
     public void OnAdd ()
     {
-        if (!hit)
-            return;
-
         RouteMaker.RoutePoint newRoutePoint = new RouteMaker.RoutePoint();
 
         newRoutePoint.position = mouseHit.point;
@@ -129,29 +134,20 @@ public class RouteMakerEditor : Editor
 
     public void OnEdit ()
     {
-        if (selectedPoint != null)
+        Vector3 change = Handles.PositionHandle(selectedPoint.position, Quaternion.LookRotation(selectedPoint.normal));
+
+        Vector2 screenPos = HandleUtility.WorldToGUIPoint(change);
+        Ray rayTest = HandleUtility.GUIPointToWorldRay(screenPos);
+        RaycastHit hitTest;
+
+        if (Physics.Raycast(rayTest, out hitTest, 10000, routeMaker.wallLayer))
         {
-            Vector3 change = Handles.PositionHandle(selectedPoint.position, Quaternion.LookRotation(selectedPoint.normal));
-
-            Vector2 screenPos = HandleUtility.WorldToGUIPoint(change);
-            Ray rayTest = HandleUtility.GUIPointToWorldRay(screenPos);
-            RaycastHit hitTest;
-
-            if (Physics.Raycast(rayTest, out hitTest, 10000, routeMaker.wallLayer))
-            {
-                selectedPoint.position = hitTest.point;
-                selectedPoint.normal = hitTest.normal;
-            }
-
-            Handles.color = Color.red;
-            Handles.DrawWireDisc(selectedPoint.position, selectedPoint.normal, 0.5f);
+            selectedPoint.position = hitTest.point;
+            selectedPoint.normal = hitTest.normal;
         }
 
-        //Set new selected point
-        if (Event.current.type == EventType.MouseDown && hit )
-        {
-            selectedPoint = getClosestPointTo(mouseHit.point);
-        }
+        Handles.color = Color.red;
+        Handles.DrawWireDisc(selectedPoint.position, selectedPoint.normal, 0.5f);
     }
 
     public void DrawBezierCurve()
@@ -180,8 +176,6 @@ public class RouteMakerEditor : Editor
 
     public RouteMaker.RoutePoint getClosestPointTo(Vector3 p)
     {
-        var t = (target as RouteMaker);
-
         RouteMaker.RoutePoint closestPoint = null;
         float smallestDistance = float.MaxValue;
 
