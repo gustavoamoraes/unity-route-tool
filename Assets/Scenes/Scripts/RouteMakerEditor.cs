@@ -136,14 +136,20 @@ public class RouteMakerEditor : Editor
     {
         Vector3 change = Handles.PositionHandle(selectedPoint.position, Quaternion.LookRotation(selectedPoint.normal));
 
-        Vector2 screenPos = HandleUtility.WorldToGUIPoint(change);
-        Ray rayTest = HandleUtility.GUIPointToWorldRay(screenPos);
-        RaycastHit hitTest;
+        float diff = (selectedPoint.position - change).magnitude;
 
-        if (Physics.Raycast(rayTest, out hitTest, 10000, routeMaker.wallLayer))
+        //If handle was moved
+        if (diff > 0)
         {
-            selectedPoint.position = hitTest.point;
-            selectedPoint.normal = hitTest.normal;
+            Vector2 screenPos = HandleUtility.WorldToGUIPoint(change);
+            Ray rayTest = HandleUtility.GUIPointToWorldRay(screenPos);
+            RaycastHit hitTest;
+
+            if (Physics.Raycast(rayTest, out hitTest, 10000, routeMaker.wallLayer))
+            {
+                selectedPoint.position = hitTest.point;
+                selectedPoint.normal = hitTest.normal;
+            }
         }
 
         Handles.color = Color.red;
