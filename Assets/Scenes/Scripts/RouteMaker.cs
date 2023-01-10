@@ -38,9 +38,6 @@ public class RouteMaker : MonoBehaviour
             {
                 Gizmos.color = Color.white;
                 Gizmos.DrawSphere(route.anchors[i].position, 0.1f);
-
-                if (i == route.anchors.Count - 1)
-                    continue;
             }
         }
 #endif

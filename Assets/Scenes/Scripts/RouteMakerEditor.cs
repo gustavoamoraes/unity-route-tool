@@ -51,7 +51,7 @@ public class RouteMakerEditor : Editor
         for (int i = 0; i < routes.arraySize; i++)
         {
             if (routeMaker.routes.Count == 0)
-                return;
+                break;
 
             var route = routes.GetArrayElementAtIndex(i);
             var routeName = route.FindPropertyRelative("name");
